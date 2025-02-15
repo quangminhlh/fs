@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Yêu cầu nhập thông tin
-read -p "Nhập hostname chính (vd: example.com): " MAIN_DOMAIN
-read -p "Nhập email admin: " EMAIL
-read -p "Nhập mật khẩu root mới: " ROOT_PASSWORD
-read -p "Nhập mật khẩu cPanel mới: " CPANEL_PASSWORD
-read -p "Nhập port cho VSCode Server (mặc định 8080): " VSCODE_PORT
+# Yêu cầu nhập thông tin với icon
+read -p "🔧 Nhập hostname chính (vd: example.com): " MAIN_DOMAIN
+read -p "📧 Nhập email admin: " EMAIL
+read -p "🔑 Nhập mật khẩu root mới: " ROOT_PASSWORD
+read -p "🛠️ Nhập mật khẩu cPanel mới: " CPANEL_PASSWORD
+read -p "🔐 Nhập port cho VSCode Server (mặc định 8080): " VSCODE_PORT
 VSCODE_PORT=${VSCODE_PORT:-8443}
-read -p "Nhập mật khẩu cho VSCode Server: " VSCODE_PASSWORD
+read -p "🔑 Nhập mật khẩu cho VSCode Server: " VSCODE_PASSWORD
 
 # Đổi mật khẩu root
 echo "root:$ROOT_PASSWORD" | chpasswd
