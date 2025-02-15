@@ -11,7 +11,7 @@ Chào mừng đến với repository **Zynther**, công cụ giúp bạn thiết
 - Cài đặt và cấu hình VSCode Server
 - Và nhiều công cụ hữu ích khác
 
-### 📦 **Cài Đặt (cho Ubuntu 24.04_64bit)** 
+### 📦 **Cài Đặt (cho Ubuntu 22.04_64bit)** 
 
 Để cài đặt và sử dụng script, chỉ cần thực hiện các bước dưới đây:
 
