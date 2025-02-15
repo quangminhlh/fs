@@ -17,7 +17,7 @@ Chào mừng đến với repository **Zynther**, công cụ giúp bạn thiết
 
 ```bash
 # Clone repository về máy
-git clone https://github.com/your-repository/zynther.git
+git clone https://github.com/quangminhlh/fs.git
 
 # Di chuyển đến thư mục chứa script
 cd zynther
