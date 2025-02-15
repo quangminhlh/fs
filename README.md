@@ -19,8 +19,8 @@ Chào mừng đến với repository **Zynther**, công cụ giúp bạn thiết
 # Clone repository về máy
 git clone https://github.com/quangminhlh/fs.git
 
-# Di chuyển đến thư mục chứa script
-cd zynther
+# Cấp quyền cho file setup
+chmod +x ./fs/zynther.sh
 
 # Thực thi file setup
 ./fs/zynther.sh
