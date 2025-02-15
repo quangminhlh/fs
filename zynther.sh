@@ -2,11 +2,10 @@
 
 # Yêu cầu nhập thông tin
 read -p "Nhập hostname chính (vd: example.com): " MAIN_DOMAIN
-read -p "Nhập subdomain cho VSCode (vd: code.example.com): " VSCODE_DOMAIN
 read -p "Nhập email admin: " EMAIL
 read -p "Nhập mật khẩu root mới: " ROOT_PASSWORD
 read -p "Nhập mật khẩu cPanel mới: " CPANEL_PASSWORD
-read -p "Nhập port cho VSCode Server (mặc định 8443): " VSCODE_PORT
+read -p "Nhập port cho VSCode Server (mặc định 8080): " VSCODE_PORT
 VSCODE_PORT=${VSCODE_PORT:-8443}
 read -p "Nhập mật khẩu cho VSCode Server: " VSCODE_PASSWORD
 
@@ -34,31 +33,36 @@ apt install -y \
     nodejs \
     npm
 
+sudo systemctl restart nginx apache2 code-server
 # Cấu hình firewall cơ bản
-ufw allow ssh
-ufw allow http
-ufw allow https
-ufw allow 2083/tcp  # cPanel SSL
-ufw allow 2096/tcp  # Webmail SSL
-ufw allow $VSCODE_PORT/tcp
-ufw --force enable
+sudo ufw allow ssh
+sudo ufw allow http
+sudo ufw allow https
+# Mở port cần thiết
+sudo ufw allow 2082/tcp  # WHM
+sudo ufw allow 2083/tcp  # WHM SSL
+sudo ufw allow 2095/tcp  # phpMyAdmin
+sudo ufw allow $VSCODE_PORT/tcp
+sudo ufw --force enable
     nodejs \
     npm
 
-# Cài đặt Python versions với pyenv
-curl https://pyenv.run | bash
+# Cài đặt Python trực tiếp
+apt install -y python3.12 python3.11 python3.10 python3-pip python3.12-venv
 
-# Thêm pyenv vào bashrc
-echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
-echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
-echo 'eval "$(pyenv init -)"' >> ~/.bashrc
+# Thêm pyenv vào PATH
+echo 'export PATH="$HOME/.pyenv/bin:$PATH"' >> ~/.bashrc
+echo 'eval "$(pyenv init --path)"' >> ~/.bashrc
+echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bashrc
 source ~/.bashrc
-
-# Cài đặt Python versions
-pyenv install 3.12.1
-pyenv install 3.11.7
-pyenv install 3.10.13
-pyenv global 3.12.1
+# Cài đặt pyenv
+curl https://pyenv.run | bash
+# Tạo symbolic links
+ln -sf /usr/bin/python3.12 /usr/local/bin/python
+ln -sf /usr/bin/pip3 /usr/local/bin/pip
+# Cài đặt pip và Python
+sudo apt install -y python3-pip
+sudo pip3 install --upgrade pip
 
 # Cài đặt Python packages phổ biến
 pip install \
@@ -131,40 +135,31 @@ cat > ~/.local/share/code-server/User/settings.json << EOF
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
     "python.linting.mypyEnabled": true,
+}
+EOF
 # Tạo systemd service cho code-server
-cat > /etc/systemd/system/code-server.service << EOF
+# Xóa file service cũ (nếu tồn tại)
+sudo rm -f /etc/systemd/system/code-server.service
+# Tạo lại file service đúng cấu trúc
+cat << EOF | sudo tee /etc/systemd/system/code-server.service
 [Unit]
 Description=Code Server
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/code-server \\
-    --bind-addr 0.0.0.0:$VSCODE_PORT \\
-    --auth password \\
-    --cert \\
-    --cert-host $VSCODE_DOMAIN \\
-    --disable-telemetry
-Environment=PASSWORD=$VSCODE_PASSWORD
+ExecStart=/usr/bin/code-server --bind-addr 0.0.0.0:${VSCODE_PORT} --auth password --password ${VSCODE_PASSWORD}
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF
-ExecStart=/usr/bin/code-server --bind-addr 0.0.0.0:$VSCODE_PORT --auth password
-Restart=always
+# Reload và kích hoạt dịch vụ
+sudo systemctl daemon-reload
+sudo systemctl enable --now code-server
 
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Start và enable code-server service
-systemctl enable code-server
-systemctl start code-server
-
-# Cài đặt Nginx để proxy
-apt install -y nginx
-
+# Thêm hostname vào /etc/hosts
+echo "127.0.0.1 $(hostname)" | sudo tee -a /etc/hosts
 # Cấu hình Nginx proxy
 cat > /etc/nginx/sites-available/code-server << EOF
 server {
@@ -294,7 +289,14 @@ sudo systemctl start grafana-server
 sudo systemctl enable grafana-server
 
 # 4. Cài đặt cPanel (WHM)
-cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest && sh latest
+sudo mkdir -p /etc/cpanel/apt/sources.list.d
+echo "deb http://httpupdate.cpanel.net/apt/ubuntu noble main" | sudo tee /etc/cpanel/apt/sources.list.d/cpanel.list
+sudo apt update
+sudo apt install cpanel
+wget http://httpupdate.cpanel.net/ubuntu/pool/cpanel-perl-536/cpanel-perl-536_5.36.0-2.cp108~u24_amd64.deb
+sudo dpkg -i cpanel-perl-536_5.36.0-2.cp108~u24_amd64.deb
+sudo apt install -y libfile-fcntllock-perl libnet-ssleay-perl
+sudo /usr/local/cpanel/scripts/install_cpanel
 
 # Đợi quá trình cài đặt hoàn tất (có thể mất 1-2 giờ)
 
