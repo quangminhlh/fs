@@ -290,12 +290,13 @@ cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest && sh la
 # 5. Cấu hình Firewall (UFW)
 sudo ufw allow 9090/tcp  # Prometheus
 sudo ufw allow 9100/tcp  # Node Exporter
-sudo ufw allow 3000/tcp  # Grafana
-sudo ufw allow 2087/tcp  # WHM SSL
-sudo ufw allow 2083/tcp  # cPanel SSL
-sudo ufw allow 80/tcp    # HTTP
-sudo ufw allow 443/tcp   # HTTPS
+# Download và cài đặt cPanel
+cd /home || exit 1
+if curl -o latest -L https://securedownloads.cpanel.net/latest; then
+    chmod +x latest
 
+    # Chạy cài đặt với các tùy chọn
+    ./latest \
 # Tạo file cấu hình cPanel
 cat > /etc/install_conf << EOF
 host: $HOSTNAME
