@@ -26,6 +26,18 @@ chmod +x ./fs/zynther.sh
 ./fs/zynther.sh
 ```
 
+### **Cài đặt bản Mini**
+```bash
+# Clone repository về máy
+git clone https://github.com/quangminhlh/fs.git
+
+# Cấp quyền cho file setup
+chmod +x ./fs/zynther.sh
+
+# Thực thi file setup
+./fs/zynther_mini.sh
+```
+
 ## 📌 **Nếu bạn vừa cài lại hệ điều hành cho server và không kết nối được SSH**
 Lỗi này xảy ra khi SSH phát hiện rằng khóa máy chủ mà bạn đang kết nối đã thay đổi. Điều này có thể do:
 1. **Máy chủ thay đổi khóa SSH** (do cài đặt lại, cập nhật, v.v.).
