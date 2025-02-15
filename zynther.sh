@@ -1,5 +1,5 @@
 #!/bin/bash
-clear
+
 # Yêu cầu nhập thông tin
 read -p "Nhập hostname chính (vd: example.com): " MAIN_DOMAIN
 read -p "Nhập email admin: " EMAIL
@@ -16,6 +16,9 @@ hostnamectl set-hostname $HOSTNAME
 
 # Cập nhật system
 apt update && apt upgrade -y
+
+sudo apt install apache2
+
 
 # Cài đặt các dependency cần thiết
 apt install -y \
