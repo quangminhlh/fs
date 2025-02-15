@@ -1,5 +1,5 @@
 #!/bin/bash
-
+clear
 # Yêu cầu nhập thông tin
 read -p "Nhập hostname chính (vd: example.com): " MAIN_DOMAIN
 read -p "Nhập email admin: " EMAIL
