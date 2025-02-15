@@ -36,4 +36,4 @@ Lỗi này xảy ra khi SSH phát hiện rằng khóa máy chủ mà bạn đang
 Để xóa khóa cũ của máy chủ và giải quyết lỗi, bạn có thể sử dụng lệnh sau trong terminal của bạn:
 
 ```bash
-ssh-keygen -R sv.zynther.io.vn
+ssh-keygen -R ip_server_của_bạn
