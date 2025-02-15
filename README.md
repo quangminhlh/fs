@@ -24,3 +24,16 @@ cd zynther
 
 # Thực thi file setup
 ./fs/zynther.sh
+```
+
+## 📌 **Nếu bạn vừa cài lại hệ điều hành cho server và không kết nối được SSH**
+Lỗi này xảy ra khi SSH phát hiện rằng khóa máy chủ mà bạn đang kết nối đã thay đổi. Điều này có thể do:
+1. **Máy chủ thay đổi khóa SSH** (do cài đặt lại, cập nhật, v.v.).
+2. **Tấn công Man-in-the-Middle (MITM)**, nơi một bên thứ ba có thể đang giả mạo máy chủ.
+
+## 🛠️ **Cách Sửa Lỗi**
+### **1. Xóa khóa SSH cũ**
+Để xóa khóa cũ của máy chủ và giải quyết lỗi, bạn có thể sử dụng lệnh sau trong terminal của bạn:
+
+```bash
+ssh-keygen -R sv.zynther.io.vn
