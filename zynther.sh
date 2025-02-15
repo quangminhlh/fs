@@ -1,28 +1,25 @@
 #!/bin/bash
 
-# Nhập thông tin cấu hình
-read -p "Nhập hostname (vd: server.domain.com): " HOSTNAME
+# Yêu cầu nhập thông tin
+read -p "Nhập hostname chính (vd: example.com): " MAIN_DOMAIN
+read -p "Nhập subdomain cho VSCode (vd: code.example.com): " VSCODE_DOMAIN
 read -p "Nhập email admin: " EMAIL
 read -p "Nhập mật khẩu root mới: " ROOT_PASSWORD
 read -p "Nhập mật khẩu cPanel mới: " CPANEL_PASSWORD
-read -p "Nhập mật khẩu phpMyAdmin mới: " PMA_PASSWORD
-# Nhập thông tin cấu hình
-read -p "Nhập port cho VSCode Server (mặc định 8080): " VSCODE_PORT
-VSCODE_PORT=${VSCODE_PORT:-8080}
+read -p "Nhập port cho VSCode Server (mặc định 8443): " VSCODE_PORT
+VSCODE_PORT=${VSCODE_PORT:-8443}
 read -p "Nhập mật khẩu cho VSCode Server: " VSCODE_PASSWORD
+
+# Đổi mật khẩu root
+echo "root:$ROOT_PASSWORD" | chpasswd
 # Cập nhật hostname
 hostnamectl set-hostname $HOSTNAME
 
 # Cập nhật system
 apt update && apt upgrade -y
 
-apt install zip unzip -y
-
-# Cài đặt dependencies
+# Cài đặt các dependency cần thiết
 apt install -y \
-    wget \
-    curl \
-    git \
     build-essential \
     libssl-dev \
     zlib1g-dev \
@@ -30,12 +27,21 @@ apt install -y \
     libreadline-dev \
     libsqlite3-dev \
     libncursesw5-dev \
-    xz-utils \
-    tk-dev \
     libxml2-dev \
     libxmlsec1-dev \
     libffi-dev \
     liblzma-dev \
+    nodejs \
+    npm
+
+# Cấu hình firewall cơ bản
+ufw allow ssh
+ufw allow http
+ufw allow https
+ufw allow 2083/tcp  # cPanel SSL
+ufw allow 2096/tcp  # Webmail SSL
+ufw allow $VSCODE_PORT/tcp
+ufw --force enable
     nodejs \
     npm
 
@@ -125,21 +131,26 @@ cat > ~/.local/share/code-server/User/settings.json << EOF
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
     "python.linting.mypyEnabled": true,
-    "python.analysis.typeCheckingMode": "basic",
-    "python.defaultInterpreterPath": "/root/.pyenv/versions/3.12.1/bin/python",
-    "jupyter.alwaysTrustNotebooks": true
-}
-EOF
-
-# Tạo service cho code-server
+# Tạo systemd service cho code-server
 cat > /etc/systemd/system/code-server.service << EOF
 [Unit]
-Description=code-server
+Description=Code Server
 After=network.target
 
 [Service]
 Type=simple
+ExecStart=/usr/bin/code-server \\
+    --bind-addr 0.0.0.0:$VSCODE_PORT \\
+    --auth password \\
+    --cert \\
+    --cert-host $VSCODE_DOMAIN \\
+    --disable-telemetry
 Environment=PASSWORD=$VSCODE_PASSWORD
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
 ExecStart=/usr/bin/code-server --bind-addr 0.0.0.0:$VSCODE_PORT --auth password
 Restart=always
 
