@@ -12,13 +12,10 @@ read -p "🔑 Nhập mật khẩu cho VSCode Server: " VSCODE_PASSWORD
 # Đổi mật khẩu root
 echo "root:$ROOT_PASSWORD" | chpasswd
 # Cập nhật hostname
-hostnamectl set-hostname $HOSTNAME
+hostnamectl set-hostname $MAIN_DOMAIN
 
 # Cập nhật system
 apt update && apt upgrade -y
-
-sudo apt install apache2
-
 
 # Cài đặt các dependency cần thiết
 apt install -y \
@@ -36,19 +33,16 @@ apt install -y \
     nodejs \
     npm
 
-sudo systemctl restart nginx apache2 code-server
 # Cấu hình firewall cơ bản
-sudo ufw allow ssh
-sudo ufw allow http
-sudo ufw allow https
+ufw allow ssh
+ufw allow http
+ufw allow https
 # Mở port cần thiết
-sudo ufw allow 2082/tcp  # WHM
-sudo ufw allow 2083/tcp  # WHM SSL
-sudo ufw allow 2095/tcp  # phpMyAdmin
-sudo ufw allow $VSCODE_PORT/tcp
-sudo ufw --force enable
-    nodejs \
-    npm
+ufw allow 2082/tcp  # WHM
+ufw allow 2083/tcp  # WHM SSL
+ufw allow 2095/tcp  # phpMyAdmin
+ufw allow $VSCODE_PORT/tcp
+ufw --force enable
 
 # Cài đặt Python trực tiếp
 apt install -y python3.12 python3.11 python3.10 python3-pip python3.12-venv
@@ -58,14 +52,17 @@ echo 'export PATH="$HOME/.pyenv/bin:$PATH"' >> ~/.bashrc
 echo 'eval "$(pyenv init --path)"' >> ~/.bashrc
 echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bashrc
 source ~/.bashrc
+
 # Cài đặt pyenv
 curl https://pyenv.run | bash
+
 # Tạo symbolic links
 ln -sf /usr/bin/python3.12 /usr/local/bin/python
 ln -sf /usr/bin/pip3 /usr/local/bin/pip
+
 # Cài đặt pip và Python
-sudo apt install -y python3-pip
-sudo pip3 install --upgrade pip
+apt install -y python3-pip
+pip3 install --upgrade pip
 
 # Cài đặt Python packages phổ biến
 pip install \
@@ -137,13 +134,11 @@ cat > ~/.local/share/code-server/User/settings.json << EOF
     "python.formatting.provider": "black",
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
-    "python.linting.mypyEnabled": true,
+    "python.linting.mypyEnabled": true
 }
 EOF
+
 # Tạo systemd service cho code-server
-# Xóa file service cũ (nếu tồn tại)
-sudo rm -f /etc/systemd/system/code-server.service
-# Tạo lại file service đúng cấu trúc
 cat << EOF | sudo tee /etc/systemd/system/code-server.service
 [Unit]
 Description=Code Server
@@ -157,12 +152,14 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 EOF
+
 # Reload và kích hoạt dịch vụ
 sudo systemctl daemon-reload
 sudo systemctl enable --now code-server
 
 # Thêm hostname vào /etc/hosts
 echo "127.0.0.1 $(hostname)" | sudo tee -a /etc/hosts
+
 # Cấu hình Nginx proxy
 cat > /etc/nginx/sites-available/code-server << EOF
 server {
@@ -184,7 +181,6 @@ EOF
 ln -s /etc/nginx/sites-available/code-server /etc/nginx/sites-enabled/
 rm /etc/nginx/sites-enabled/default
 systemctl restart nginx
-
 
 # Cài đặt các package cần thiết
 apt install -y curl wget nano git unzip htop
@@ -306,6 +302,7 @@ sudo /usr/local/cpanel/scripts/install_cpanel
 # 5. Cấu hình Firewall (UFW)
 sudo ufw allow 9090/tcp  # Prometheus
 sudo ufw allow 9100/tcp  # Node Exporter
+
 # Download và cài đặt cPanel
 cd /home || exit 1
 if curl -o latest -L https://securedownloads.cpanel.net/latest; then
@@ -313,25 +310,11 @@ if curl -o latest -L https://securedownloads.cpanel.net/latest; then
 
     # Chạy cài đặt với các tùy chọn
     ./latest \
-# Tạo file cấu hình cPanel
-cat > /etc/install_conf << EOF
-host: $HOSTNAME
-contactemail: $EMAIL
-randompass: 0
-pass: $CPANEL_PASSWORD
-ip-already-configured: 1
-EOF
-
-# Download và cài đặt cPanel
-cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest
-chmod +x latest
-
-# Chạy cài đặt với các tùy chọn
-./latest \
---skip-cloudlinux \
---skip-security-advisor \
---skip-selinux \
---force
+    --skip-cloudlinux \
+    --skip-security-advisor \
+    --skip-selinux \
+    --force
+fi
 
 # Đợi cPanel cài đặt xong
 
@@ -415,12 +398,12 @@ useIpInProxyHeader         1
 EOF
 
 # Cài đặt Memcached
-yum install memcached -y
+apt install memcached -y
 systemctl start memcached
 systemctl enable memcached
 
 # Cài đặt Redis
-yum install redis -y
+apt install redis -y
 systemctl start redis
 systemctl enable redis
 
