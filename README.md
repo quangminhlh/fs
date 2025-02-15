@@ -32,7 +32,7 @@ chmod +x ./fs/zynther.sh
 git clone https://github.com/quangminhlh/fs.git
 
 # Cấp quyền cho file setup
-chmod +x ./fs/zynther.sh
+chmod +x ./fs/zynther_mini.sh
 
 # Thực thi file setup
 ./fs/zynther_mini.sh
