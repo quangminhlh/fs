@@ -257,6 +257,7 @@ csf -r
 systemctl stop apache2
 systemctl disable apache2
 
+clear
 # Hoàn tất
 echo "=========================================="
 echo "Cài đặt hoàn tất!"
