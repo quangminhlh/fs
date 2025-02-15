@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e  # Dừng script nếu có lỗi xảy ra
-
+clear
 # Yêu cầu nhập thông tin với icon
 read -p "🔧 Nhập hostname chính (vd: example.com): " MAIN_DOMAIN
 read -p "📧 Nhập email admin: " EMAIL
@@ -47,7 +47,20 @@ ufw allow $VSCODE_PORT/tcp
 ufw --force enable
 
 # Cài đặt Python
-apt install -y python3.12 python3.11 python3.10 python3-pip python3.12-venv
+sudo apt install -y build-essential checkinstall
+sudo apt install -y zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev
+sudo apt install -y libreadline-dev libffi-dev curl
+
+# Download Python 3.12 source code
+curl -O https://www.python.org/ftp/python/3.12.0/Python-3.12.0.tgz
+
+# Extract the tar file
+tar -xvzf Python-3.12.0.tgz
+cd Python-3.12.0
+
+# Compile and install
+./configure --enable-optimizations
+sudo make altinstall
 
 # Cấu hình pyenv
 curl https://pyenv.run | bash
