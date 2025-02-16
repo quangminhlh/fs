@@ -163,91 +163,85 @@ case $PANEL in
 
     aapanel")
         clear
-        # Thiết lập màu sắc
-        YELLOW='\033[1;33m'
-        RED='\033[0;31m'
-        NC='\033[0m' # No Color
-        
-        # Thiết lập giá trị mặc định
-        AAPANEL_PORT_DEFAULT=7800
         echo -e "${YELLOW}🛠️ Thiết lập aaPanel...${NC}"
-        
-        # Nhập thông tin
-        read -p "🔐 Nhập tài khoản admin cho aaPanel (mặc định: admin): " AAPANEL_USER
-        AAPANEL_USER=${AAPANEL_USER:-admin}
-        
-        # Validate mật khẩu
-        while true; do
-            read -p "🔐 Nhập mật khẩu admin cho aaPanel (tối thiểu 8 ký tự): " AAPANEL_PASS
-            if [ ${#AAPANEL_PASS} -ge 8 ]; then
-                break
-            else
-                echo -e "${RED}❌ Mật khẩu phải có ít nhất 8 ký tự!${NC}"
-            fi
-        done
+    
+    # Nhập thông tin
+    read -p "🔐 Nhập tài khoản admin cho aaPanel (mặc định: admin): " AAPANEL_USER
+    AAPANEL_USER=${AAPANEL_USER:-admin}
+    
+    # Validate mật khẩu
+    while true; do
+        read -p "🔐 Nhập mật khẩu admin cho aaPanel (tối thiểu 8 ký tự): " AAPANEL_PASS
+        if [ ${#AAPANEL_PASS} -ge 8 ]; then
+            break
+        else
+            echo -e "${RED}❌ Mật khẩu phải có ít nhất 8 ký tự!${NC}"
+        fi
+    done
 
-        read -p "🔌 Nhập port cho aaPanel (mặc định: $AAPANEL_PORT_DEFAULT): " AAPANEL_PORT
-        AAPANEL_PORT=${AAPANEL_PORT:-$AAPANEL_PORT_DEFAULT}
-
-        # Kiểm tra port chính xác
-        while ss -tuln | awk -v port="$AAPANEL_PORT" '$5 ~ ":"port"$" {exit 0} END {exit 1}'; do
+    # Nhập và validate port
+    while true; do
+        read -p "🔌 Nhập port cho aaPanel (mặc định: 7800): " AAPANEL_PORT
+        AAPANEL_PORT=${AAPANEL_PORT:-7800}
+        
+        if ! [[ $AAPANEL_PORT =~ ^[0-9]+$ ]] || [ $AAPANEL_PORT -lt 1024 ] || [ $AAPANEL_PORT -gt 65535 ]; then
+            echo -e "${RED}❌ Port phải từ 1024 đến 65535!${NC}"
+            continue
+        fi
+        
+        if ss -tuln | grep -q ":$AAPANEL_PORT "; then
             echo -e "${RED}❌ Port $AAPANEL_PORT đã được sử dụng!${NC}"
-            read -p "Vui lòng nhập port khác: " AAPANEL_PORT
-        done
-
-        # Tải script cài đặt
-        echo -e "${YELLOW}📥 Tải script cài đặt aaPanel...${NC}"
-        if ! wget -O aapanel-install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh; then
-            echo -e "${RED}❌ Lỗi khi tải script cài đặt aaPanel!${NC}"
-            exit 1
+        else
+            break
         fi
+    done
 
-        # Thực thi cài đặt
-        echo -e "${YELLOW}⏳ Đang cài đặt aaPanel...${NC}"
-        if ! bash aapanel-install.sh <<< "y"; then
-            echo -e "${RED}❌ Lỗi trong quá trình cài đặt aaPanel!${NC}"
-            exit 1
-        fi
+    # Tải và cài đặt aaPanel
+    echo -e "${YELLOW}📥 Tải script cài đặt aaPanel...${NC}"
+    if ! wget -O aapanel-install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh; then
+        echo -e "${RED}❌ Lỗi khi tải script cài đặt aaPanel!${NC}"
+        exit 1
+    fi
 
-        # Chờ dịch vụ khởi động
-        echo -e "${YELLOW}⏳ Đợi 20 giây để aaPanel khởi động...${NC}"
-        sleep 20
+    echo -e "${YELLOW}⏳ Đang cài đặt aaPanel...${NC}"
+    if ! bash aapanel-install.sh <<< "y"; then
+        echo -e "${RED}❌ Lỗi trong quá trình cài đặt aaPanel!${NC}"
+        exit 1
+    fi
 
-        # Cài đặt Expect
-        if ! apt install -y expect; then
-            echo -e "${RED}❌ Lỗi khi cài đặt Expect!${NC}"
-            exit 1
-        fi
-
-        # Thiết lập thông tin qua Expect
-        echo -e "${YELLOW}🔧 Thiết lập thông tin đăng nhập...${NC}"
-        /usr/bin/expect <<EOF
+    # Cấu hình aaPanel
+    echo -e "${YELLOW}🔧 Thiết lập thông tin đăng nhập...${NC}"
+    /usr/bin/expect <<EOF
 spawn bt 5
-expect "Enter new password:"
+expect "Enter username:"
+send "$AAPANEL_USER\r"
+expect "Enter password:"
 send "$AAPANEL_PASS\r"
 expect "Confirm password:"
 send "$AAPANEL_PASS\r"
-expect "Enter username:"
-send "$AAPANEL_USER\r"
-expect "Successfully set"
+expect "successfully"
 expect eof
 EOF
 
-        echo -e "${YELLOW}🔧 Thiết lập cổng kết nối...${NC}"
-        /usr/bin/expect <<EOF
+    echo -e "${YELLOW}🔧 Thiết lập cổng kết nối...${NC}"
+    /usr/bin/expect <<EOF
 spawn bt 6
-expect "Enter new port:"
+expect "port:"
 send "$AAPANEL_PORT\r"
-expect "Successfully modified"
+expect "successfully"
 expect eof
 EOF
 
-        # Khởi động lại aaPanel
-        bt 1
-        bt 3
+    # Khởi động lại aaPanel
+    bt 1
+    bt 3
 
-        AAPANEL_LINK="http://$(curl -s icanhazip.com):$AAPANEL_PORT"
-        ;;
+    # Thêm port vào firewall
+    ufw allow $AAPANEL_PORT/tcp
+    ufw --force enable
+
+    AAPANEL_LINK="http://$(curl -s icanhazip.com):$AAPANEL_PORT"
+    echo -e "${GREEN}✅ aaPanel đã được cài đặt thành công!${NC}"
         
     "cpanel")
         clear
