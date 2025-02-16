@@ -148,17 +148,18 @@ case $PANEL in
         echo -e "${YELLOW}📥 Tải script cài đặt aaPanel...${NC}"
         wget -O aapanel-install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh
         bash aapanel-install.sh <<< "y"
-        clear
         echo -e "${YELLOW}📥 Thay đổi thông tin aaPanel...${NC}"
-        spawn bt 5
-        spawn bt 6
+        bt 5
+        bt 6
+        bt 8
+        echo -e "${YELLOW}📥 Khởi động lại aaPanel...${NC}"
         bt 1
         bt 3
         ufw allow $AAPANEL_PORT/tcp
         ufw --force enable
         AAPANEL_LINK="http://$(curl -s icanhazip.com):$AAPANEL_PORT"
         ;;
-        
+             
     "cpanel")
         clear
         echo -e "${YELLOW}🛠️ Cài đặt cPanel...${NC}"
@@ -223,15 +224,6 @@ echo -e "${BLUE}
 | 📊 phpMyAdmin:     http://$DOMAIN/phpmyadmin
 | 💻 VS Code Server: http://$DOMAIN:$VSCODE_PORT
 | 📈 Grafana:        http://$DOMAIN:3001     "
-
-if [ "$PANEL" = "aapanel" ]; then
-    echo -e "|------------------------------------------|"
-    echo -e "| 🛠️ ${YELLOW}aaPanel Admin:${BLUE} $AAPANEL_LINK       "
-    echo -e "| 🛠️ ${YELLOW}Hoặc sử dụng IP: http://$(curl -s icanhazip.com):$AAPANEL_PORT"
-    echo -e "| 🛠️ ${YELLOW}Username:${BLUE}      $AAPANEL_USER             "
-    echo -e "| 🛠️ ${YELLOW}Password:${BLUE}      $AAPANEL_PASS             "
-    echo -e "| 🛠️ ${YELLOW}Port:${BLUE}          $AAPANEL_PORT               "
-fi
 
 echo -e "+------------------------------------------+
 🔑 Thông tin đăng nhập:
