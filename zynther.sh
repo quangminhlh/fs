@@ -163,7 +163,7 @@ case $PANEL in
 
     aapanel")
         clear
-        echo -e "${YELLOW}🛠️ Thiết lập aaPanel...${NC}"
+        echo -e "${YELLOW} Thiết lập aaPanel...${NC}"
     
     # Nhập thông tin
     read -p "🔐 Nhập tài khoản admin cho aaPanel (mặc định: admin): " AAPANEL_USER
