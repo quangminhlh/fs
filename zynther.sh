@@ -148,6 +148,8 @@ case $PANEL in
         echo -e "${YELLOW}📥 Tải script cài đặt aaPanel...${NC}"
         wget -O aapanel-install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh
         bash aapanel-install.sh <<< "y"
+        clear
+        echo -e "${YELLOW}📥 Thay đổi thông tin aaPanel...${NC}"
         spawn bt 5
         spawn bt 6
         bt 1
