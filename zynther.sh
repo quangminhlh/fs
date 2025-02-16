@@ -133,89 +133,36 @@ sed -i "s/;http_port = 3000/http_port = 3001/" /etc/grafana/grafana.ini
 systemctl start grafana-server
 systemctl enable grafana-server
 
+
 # Cài đặt control panel
 case $PANEL in
     "cyberpanel")
         clear
         echo -e "${YELLOW}🛠️ Cài đặt CyberPanel...${NC}"
-        
-        # Kiểm tra kết nối Internet
-        if ! ping -c 1 google.com &> /dev/null; then
-            echo -e "${RED}❌ Lỗi: Không có kết nối Internet!${NC}"
-            exit 1
-        fi
-
-        # Xác nhận cài đặt
-        read -p "Bạn có chắc chắn muốn cài đặt CyberPanel? (y/n) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
-
-        # Tải và chạy script cài đặt
-        echo -e "${YELLOW}📥 Tải script cài đặt CyberPanel...${NC}"
-        if ! (curl -sS https://cyberpanel.net/install.sh || wget -q -O - https://cyberpanel.net/install.sh) | sh; then
-            echo -e "${RED}❌ Lỗi: Cài đặt CyberPanel không thành công!${NC}"
-            exit 1
-        fi
+        curl -sS https://cyberpanel.net/install.sh || wget -q -O - https://cyberpanel.net/install.sh
         echo -e "${GREEN}✅ Cài đặt CyberPanel hoàn tất!${NC}"
         ;;
 
-    aapanel")
+    "aapanel")
         clear
         echo -e "${YELLOW}📥 Tải script cài đặt aaPanel...${NC}"
-        if ! wget -O aapanel-install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh; then
-        echo -e "${RED}❌ Lỗi khi tải script cài đặt aaPanel!${NC}"
-        exit 1
-        
-
-        echo -e "${YELLOW}⏳ Đang cài đặt aaPanel...${NC}"
-        if ! bash aapanel-install.sh <<< "y"; then
-            echo -e "${RED}❌ Lỗi trong quá trình cài đặt aaPanel!${NC}"
-            exit 1
-        fi
-
-        # Cấu hình aaPanel
-        echo -e "${YELLOW}🔧 Thiết lập thông tin đăng nhập...${NC}"
-        /usr/bin/expect <<EOF
+        wget -O aapanel-install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh
+        bash aapanel-install.sh <<< "y"
         spawn bt 5
         spawn bt 6
-
-        # Khởi động lại aaPanel
         bt 1
         bt 3
-
-        # Thêm port vào firewall
         ufw allow $AAPANEL_PORT/tcp
         ufw --force enable
-
         AAPANEL_LINK="http://$(curl -s icanhazip.com):$AAPANEL_PORT"
-        echo -e "${GREEN}✅ aaPanel đã được cài đặt thành công!${NC}"
+        ;;
         
     "cpanel")
         clear
         echo -e "${YELLOW}🛠️ Cài đặt cPanel...${NC}"
-
-        # Kiểm tra kết nối Internet
-        if ! ping -c 1 google.com &> /dev/null; then
-            echo -e "${RED}❌ Lỗi: Không có kết nối Internet!${NC}"
-            exit 1
-        fi
-
-        # Xác nhận cài đặt
-        read -p "Bạn có chắc chắn muốn cài đặt cPanel? (y/n) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
-
-        # Tải script cài đặt
         echo -e "${YELLOW}📥 Tải script cài đặt cPanel...${NC}"
         cd /home
-        if ! wget https://securedownloads.cpanel.net/latest; then
-            echo -e "${RED}❌ Lỗi: Không thể tải script cài đặt cPanel!${NC}"
-            exit 1
-        fi
+        wget https://securedownloads.cpanel.net/latest
 
         # Cài đặt cPanel
         echo -e "${YELLOW}⚙️ Đang cài đặt cPanel...${NC}"
