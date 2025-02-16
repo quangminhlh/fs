@@ -163,7 +163,6 @@ case $PANEL in
 
     aapanel")
         clear
-        # Tải và cài đặt aaPanel
         echo -e "${YELLOW}📥 Tải script cài đặt aaPanel...${NC}"
         if ! wget -O aapanel-install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh; then
         echo -e "${RED}❌ Lỗi khi tải script cài đặt aaPanel!${NC}"
