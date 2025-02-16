@@ -161,8 +161,13 @@ case $PANEL in
         echo -e "${GREEN}✅ Cài đặt CyberPanel hoàn tất!${NC}"
         ;;
 
-    "aapanel")
+    aapanel")
         clear
+        # Thiết lập màu sắc
+        YELLOW='\033[1;33m'
+        RED='\033[0;31m'
+        NC='\033[0m' # No Color
+        
         # Thiết lập giá trị mặc định
         AAPANEL_PORT_DEFAULT=7800
         echo -e "${YELLOW}🛠️ Thiết lập aaPanel...${NC}"
@@ -170,48 +175,70 @@ case $PANEL in
         # Nhập thông tin
         read -p "🔐 Nhập tài khoản admin cho aaPanel (mặc định: admin): " AAPANEL_USER
         AAPANEL_USER=${AAPANEL_USER:-admin}
-        read -p "🔐 Nhập mật khẩu admin cho aaPanel (tối thiểu 8 ký tự): " AAPANEL_PASS
+        
+        # Validate mật khẩu
+        while true; do
+            read -p "🔐 Nhập mật khẩu admin cho aaPanel (tối thiểu 8 ký tự): " AAPANEL_PASS
+            if [ ${#AAPANEL_PASS} -ge 8 ]; then
+                break
+            else
+                echo -e "${RED}❌ Mật khẩu phải có ít nhất 8 ký tự!${NC}"
+            fi
+        done
+
         read -p "🔌 Nhập port cho aaPanel (mặc định: $AAPANEL_PORT_DEFAULT): " AAPANEL_PORT
         AAPANEL_PORT=${AAPANEL_PORT:-$AAPANEL_PORT_DEFAULT}
 
-        # Kiểm tra port đang sử dụng
-        while ss -tuln | grep -q ":${AAPANEL_PORT} "; do
+        # Kiểm tra port chính xác
+        while ss -tuln | awk -v port="$AAPANEL_PORT" '$5 ~ ":"port"$" {exit 0} END {exit 1}'; do
             echo -e "${RED}❌ Port $AAPANEL_PORT đã được sử dụng!${NC}"
             read -p "Vui lòng nhập port khác: " AAPANEL_PORT
         done
 
-        # Tải script cài đặt mới nhất
+        # Tải script cài đặt
         echo -e "${YELLOW}📥 Tải script cài đặt aaPanel...${NC}"
-        wget -O aapanel-install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh || {
+        if ! wget -O aapanel-install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh; then
             echo -e "${RED}❌ Lỗi khi tải script cài đặt aaPanel!${NC}"
             exit 1
-        }
+        fi
 
-        # Thực thi script cài đặt
-        bash aapanel-install.sh <<< "y" 
+        # Thực thi cài đặt
+        echo -e "${YELLOW}⏳ Đang cài đặt aaPanel...${NC}"
+        if ! bash aapanel-install.sh <<< "y"; then
+            echo -e "${RED}❌ Lỗi trong quá trình cài đặt aaPanel!${NC}"
+            exit 1
+        fi
 
         # Chờ dịch vụ khởi động
-        echo -e "${YELLOW}⏳ Đợi 15 giây để aaPanel khởi động...${NC}"
-        sleep 15
+        echo -e "${YELLOW}⏳ Đợi 20 giây để aaPanel khởi động...${NC}"
+        sleep 20
 
-        # Cài đặt Expect để tự động nhập mật khẩu
-        apt install -y expect
+        # Cài đặt Expect
+        if ! apt install -y expect; then
+            echo -e "${RED}❌ Lỗi khi cài đặt Expect!${NC}"
+            exit 1
+        fi
 
-        # Thiết lập mật khẩu và port bằng Expect
-        echo -e "${YELLOW}🔧 Thiết lập mật khẩu và port cho aaPanel...${NC}"
+        # Thiết lập thông tin qua Expect
+        echo -e "${YELLOW}🔧 Thiết lập thông tin đăng nhập...${NC}"
         /usr/bin/expect <<EOF
 spawn bt 5
-expect "Enter panel password:"
+expect "Enter new password:"
 send "$AAPANEL_PASS\r"
-expect "Re-enter panel password:"
+expect "Confirm password:"
 send "$AAPANEL_PASS\r"
+expect "Enter username:"
+send "$AAPANEL_USER\r"
+expect "Successfully set"
 expect eof
 EOF
 
+        echo -e "${YELLOW}🔧 Thiết lập cổng kết nối...${NC}"
         /usr/bin/expect <<EOF
 spawn bt 6
-expect "Enter port:"
+expect "Enter new port:"
 send "$AAPANEL_PORT\r"
+expect "Successfully modified"
 expect eof
 EOF
 
