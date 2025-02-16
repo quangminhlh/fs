@@ -1,231 +1,97 @@
 #!/bin/bash
 
-# Yêu cầu nhập thông tin với icon
-read -p "🔧 Nhập hostname chính (vd: example.com): " MAIN_DOMAIN
-read -p "📧 Nhập email admin: " EMAIL
-read -p "🔑 Nhập mật khẩu root mới: " ROOT_PASSWORD
-read -p "🛠️ Nhập mật khẩu cPanel mới: " CPANEL_PASSWORD
-read -p "🔐 Nhập port cho VSCode Server (mặc định 8080): " VSCODE_PORT
-VSCODE_PORT=${VSCODE_PORT:-8443}
-read -p "🔑 Nhập mật khẩu cho VSCode Server: " VSCODE_PASSWORD
+# Định nghĩa màu sắc
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# Đổi mật khẩu root
-echo "root:$ROOT_PASSWORD" | chpasswd
-# Cập nhật hostname
-hostnamectl set-hostname $MAIN_DOMAIN
+# Hiển thị banner
+echo -e "${BLUE}
+╔═══════════════════════════════════════════╗
+║                ${YELLOW}𝓩𝔂𝓷𝓽𝓱𝓮𝓻 𝓦𝓮𝓫𝓼𝓲𝓽𝓮${BLUE}               ║
+║           Installation & Setup Script          ║
+╚═══════════════════════════════════════════╝
+${NC}"
 
-# Cập nhật system
+# Kiểm tra phiên bản Ubuntu
+if [ "$(lsb_release -rs)" != "22.04" ]; then
+    echo -e "${RED}Lỗi: Script này chỉ hỗ trợ Ubuntu 22.04 LTS${NC}"
+    exit 1
+fi
+
+# Kiểm tra quyền root
+if [ "$EUID" -ne 0 ]; then
+    echo -e "${RED}Vui lòng chạy script với quyền root${NC}"
+    exit 1
+fi
+
+# Cảnh báo trước khi cài đặt
+echo -e "${YELLOW}
+CẢNH BÁO: Script này sẽ thực hiện các thay đổi hệ thống quan trọng
+Đảm bảo bạn đã backup dữ liệu trước khi tiếp tục!
+${NC}"
+
+read -p "Bạn có muốn tiếp tục? (y/n) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    exit 1
+fi
+
+# Nhập thông tin cấu hình
+echo -e "${GREEN}Nhập thông tin cấu hình:${NC}"
+read -p "Tên miền (VD: example.com): " DOMAIN
+read -p "MySQL Root Password: " MYSQL_ROOT_PASSWORD
+read -p "Grafana Admin Password: " GRAFANA_PASS
+read -p "VS Code Server Password: " VSCODE_PASS
+read -p "Port cho VS Code Server (mặc định 8484): " VSCODE_PORT
+VSCODE_PORT=${VSCODE_PORT:-8484}
+
+# Menu chọn control panel
+echo -e "${GREEN}Chọn control panel:${NC}"
+PS3="Nhập lựa chọn: "
+options=("cPanel" "CyberPanel" "aaPanel" "Thoát")
+select opt in "${options[@]}"
+do
+    case $opt in
+        "cPanel")
+            PANEL="cpanel"
+            break
+            ;;
+        "CyberPanel")
+            PANEL="cyberpanel"
+            break
+            ;;
+        "aaPanel")
+            PANEL="aapanel"
+            break
+            ;;
+        "Thoát")
+            exit 0
+            ;;
+        *) echo "Lựa chọn không hợp lệ";;
+    esac
+done
+
+# Cập nhật hệ thống
+echo -e "${YELLOW}Cập nhật hệ thống...${NC}"
 apt update && apt upgrade -y
+apt install -y curl wget ufw git unzip
 
-# Cài đặt các dependency cần thiết
-apt install -y \
-    build-essential \
-    libssl-dev \
-    zlib1g-dev \
-    libbz2-dev \
-    libreadline-dev \
-    libsqlite3-dev \
-    libncursesw5-dev \
-    libxml2-dev \
-    libxmlsec1-dev \
-    libffi-dev \
-    liblzma-dev \
-    nodejs \
-    npm
+# Cài đặt Prometheus và Grafana
+echo -e "${YELLOW}Cài đặt Prometheus và Grafana...${NC}"
+# Cài đặt Prometheus
+wget https://github.com/prometheus/prometheus/releases/download/v2.47.2/prometheus-2.47.2.linux-amd64.tar.gz
+tar xvfz prometheus-*.tar.gz
+mv prometheus-*/prometheus /usr/local/bin/
+mv prometheus-*/promtool /usr/local/bin/
+mkdir /etc/prometheus
+mv prometheus-*/console_libraries /etc/prometheus/
+mv prometheus-*/consoles /etc/prometheus/
 
-# Cấu hình firewall cơ bản
-ufw allow ssh
-ufw allow http
-ufw allow https
-# Mở port cần thiết
-ufw allow 2082/tcp  # WHM
-ufw allow 2083/tcp  # WHM SSL
-ufw allow 2095/tcp  # phpMyAdmin
-ufw allow $VSCODE_PORT/tcp
-ufw --force enable
-
-# Cài đặt Python trực tiếp
-apt install -y python3.12 python3.11 python3.10 python3-pip python3.12-venv
-
-# Thêm pyenv vào PATH
-echo 'export PATH="$HOME/.pyenv/bin:$PATH"' >> ~/.bashrc
-echo 'eval "$(pyenv init --path)"' >> ~/.bashrc
-echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bashrc
-source ~/.bashrc
-
-# Cài đặt pyenv
-curl https://pyenv.run | bash
-
-# Tạo symbolic links
-ln -sf /usr/bin/python3.12 /usr/local/bin/python
-ln -sf /usr/bin/pip3 /usr/local/bin/pip
-
-# Cài đặt pip và Python
-apt install -y python3-pip
-pip3 install --upgrade pip
-
-# Cài đặt Python packages phổ biến
-pip install \
-    ipython \
-    jupyter \
-    numpy \
-    pandas \
-    matplotlib \
-    scikit-learn \
-    requests \
-    flask \
-    django \
-    pytest \
-    black \
-    pylint \
-    mypy \
-    poetry
-
-# Cài đặt code-server (VSCode)
-curl -fsSL https://code-server.dev/install.sh | sh
-
-# Tạo config cho code-server
-mkdir -p ~/.config/code-server
-cat > ~/.config/code-server/config.yaml << EOF
-bind-addr: 0.0.0.0:$VSCODE_PORT
-auth: password
-password: $VSCODE_PASSWORD
-cert: false
-EOF
-
-# Cài đặt extensions phổ biến
-code-server --install-extension ms-python.python
-code-server --install-extension ms-python.vscode-pylance
-code-server --install-extension ms-toolsai.jupyter
-code-server --install-extension ms-python.isort
-code-server --install-extension njpwerner.autodocstring
-code-server --install-extension kevinrose.vsc-python-indent
-code-server --install-extension formulahendry.code-runner
-code-server --install-extension ms-python.black-formatter
-code-server --install-extension ms-vscode.cpptools
-code-server --install-extension pkief.material-icon-theme
-code-server --install-extension zhuangtongfa.material-theme
-code-server --install-extension esbenp.prettier-vscode
-code-server --install-extension dbaeumer.vscode-eslint
-code-server --install-extension eamodio.gitlens
-code-server --install-extension christian-kohler.path-intellisense
-code-server --install-extension visualstudioexptteam.vscodeintellicode
-code-server --install-extension redhat.vscode-yaml
-code-server --install-extension mikestead.dotenv
-code-server --install-extension yzhang.markdown-all-in-one
-
-# Tạo settings.json cho VSCode
-mkdir -p ~/.local/share/code-server/User/
-cat > ~/.local/share/code-server/User/settings.json << EOF
-{
-    "editor.formatOnSave": true,
-    "editor.formatOnPaste": true,
-    "editor.rulers": [80, 100],
-    "editor.minimap.enabled": true,
-    "editor.suggestSelection": "first",
-    "editor.tabSize": 4,
-    "editor.detectIndentation": true,
-    "editor.renderWhitespace": "boundary",
-    "files.trimTrailingWhitespace": true,
-    "files.insertFinalNewline": true,
-    "files.trimFinalNewlines": true,
-    "workbench.colorTheme": "One Dark Pro",
-    "workbench.iconTheme": "material-icon-theme",
-    "python.formatting.provider": "black",
-    "python.linting.enabled": true,
-    "python.linting.pylintEnabled": true,
-    "python.linting.mypyEnabled": true
-}
-EOF
-
-# Tạo systemd service cho code-server
-cat << EOF | sudo tee /etc/systemd/system/code-server.service
-[Unit]
-Description=Code Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/code-server --bind-addr 0.0.0.0:${VSCODE_PORT} --auth password --password ${VSCODE_PASSWORD}
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Reload và kích hoạt dịch vụ
-sudo systemctl daemon-reload
-sudo systemctl enable --now code-server
-
-# Thêm hostname vào /etc/hosts
-echo "127.0.0.1 $(hostname)" | sudo tee -a /etc/hosts
-
-# Cấu hình Nginx proxy
-cat > /etc/nginx/sites-available/code-server << EOF
-server {
-    listen 80;
-    listen [::]:80;
-    server_name _;
-
-    location / {
-        proxy_pass http://localhost:$VSCODE_PORT;
-        proxy_set_header Host \$host;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection upgrade;
-        proxy_set_header Accept-Encoding gzip;
-    }
-}
-EOF
-
-# Enable site và restart Nginx
-ln -s /etc/nginx/sites-available/code-server /etc/nginx/sites-enabled/
-rm /etc/nginx/sites-enabled/default
-systemctl restart nginx
-
-# Cài đặt các package cần thiết
-apt install -y curl wget nano git unzip htop
-
-# Tắt một số service không cần thiết
-systemctl disable apache2
-systemctl stop apache2
-
-# 1. Cài đặt Prometheus
-# Tạo user prometheus
-sudo useradd --no-create-home --shell /bin/false prometheus
-
-# Tạo thư mục cấu hình và data
-sudo mkdir /etc/prometheus
-sudo mkdir /var/lib/prometheus
-sudo chown prometheus:prometheus /var/lib/prometheus
-
-# Tải và cài đặt Prometheus
-wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
-tar xvf prometheus-2.45.0.linux-amd64.tar.gz
-
-sudo cp prometheus-2.45.0.linux-amd64/prometheus /usr/local/bin/
-sudo cp prometheus-2.45.0.linux-amd64/promtool /usr/local/bin/
-sudo chown prometheus:prometheus /usr/local/bin/prometheus
-sudo chown prometheus:prometheus /usr/local/bin/promtool
-
-# Cấu hình Prometheus
-sudo cat << EOF > /etc/prometheus/prometheus.yml
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
-  
-  - job_name: 'node_exporter'
-    static_configs:
-      - targets: ['localhost:9100']
-EOF
-
-sudo chown prometheus:prometheus /etc/prometheus/prometheus.yml
-
-# Tạo systemd service
-sudo cat << EOF > /etc/systemd/system/prometheus.service
+# Tạo service Prometheus
+cat <<EOF > /etc/systemd/system/prometheus.service
 [Unit]
 Description=Prometheus
 Wants=network-online.target
@@ -245,269 +111,91 @@ ExecStart=/usr/local/bin/prometheus \
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl daemon-reload
-sudo systemctl start prometheus
-sudo systemctl enable prometheus
+systemctl daemon-reload
+systemctl start prometheus
+systemctl enable prometheus
 
-# 2. Cài đặt Node Exporter
-wget https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz
-tar xvf node_exporter-1.6.1.linux-amd64.tar.gz
-sudo cp node_exporter-1.6.1.linux-amd64/node_exporter /usr/local/bin
-sudo useradd --no-create-home --shell /bin/false node_exporter
+# Cài đặt Grafana
+apt install -y apt-transport-https software-properties-common
+wget -q -O - https://packages.grafana.com/gpg.key | apt-key add -
+echo "deb https://packages.grafana.com/oss/deb stable main" | tee -a /etc/apt/sources.list.d/grafana.list
+apt update
+apt install -y grafana
+sed -i "s/;http_port = 3000/http_port = 3001/" /etc/grafana/grafana.ini
+systemctl start grafana-server
+systemctl enable grafana-server
 
-# Tạo systemd service cho Node Exporter
-sudo cat << EOF > /etc/systemd/system/node_exporter.service
+# Cài đặt control panel
+case $PANEL in
+    "cyberpanel")
+        echo -e "${YELLOW}Cài đặt CyberPanel...${NC}"
+        sh <(curl https://cyberpanel.net/install.sh || wget -O - https://cyberpanel.net/install.sh)
+        ;;
+    "aapanel")
+        echo -e "${YELLOW}Cài đặt aaPanel...${NC}"
+        wget -O install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh && bash install.sh
+        ;;
+    "cpanel")
+        echo -e "${YELLOW}Cài đặt cPanel...${NC}"
+        cd /home
+        wget https://securedownloads.cpanel.net/latest
+        sh latest
+        ;;
+esac
+
+# Cài đặt Nginx và phpMyAdmin
+echo -e "${YELLOW}Cài đặt Nginx và phpMyAdmin...${NC}"
+apt install -y nginx
+apt install -y phpmyadmin
+ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
+systemctl restart nginx
+
+# Cài đặt VS Code Server
+echo -e "${YELLOW}Cài đặt VS Code Server...${NC}"
+curl -fsSL https://code-server.dev/install.sh | sh
+cat <<EOF > /lib/systemd/system/code-server.service
 [Unit]
-Description=Node Exporter
-Wants=network-online.target
-After=network-online.target
+Description=Code Server
+After=nginx.service
 
 [Service]
-User=node_exporter
-Group=node_exporter
-Type=simple
-ExecStart=/usr/local/bin/node_exporter
+User=root
+WorkingDirectory=/root/
+Environment=PASSWORD=$VSCODE_PASS
+ExecStart=/usr/bin/code-server --bind-addr 0.0.0.0:$VSCODE_PORT
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 EOF
+systemctl daemon-reload
+systemctl start code-server
+systemctl enable code-server
 
-sudo systemctl daemon-reload
-sudo systemctl start node_exporter
-sudo systemctl enable node_exporter
+# Cấu hình firewall
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow $VSCODE_PORT/tcp
+ufw allow 3001/tcp
+ufw --force enable
 
-# 3. Cài đặt Grafana
-sudo apt-get install -y apt-transport-https software-properties-common
-wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
-echo "deb https://packages.grafana.com/oss/deb stable main" | sudo tee -a /etc/apt/sources.list.d/grafana.list
+# Hiển thị thông tin sau cài đặt
+clear
+echo -e "${GREEN}
+╔═══════════════════════════════════════════╗
+║           CÀI ĐẶT THÀNH CÔNG!            ║
+╚═══════════════════════════════════════════╝
+${NC}"
 
-sudo apt-get update
-sudo apt-get install -y grafana
-
-sudo systemctl start grafana-server
-sudo systemctl enable grafana-server
-
-# 4. Cài đặt cPanel (WHM)
-sudo mkdir -p /etc/cpanel/apt/sources.list.d
-echo "deb http://httpupdate.cpanel.net/apt/ubuntu noble main" | sudo tee /etc/cpanel/apt/sources.list.d/cpanel.list
-sudo apt update
-sudo apt install cpanel
-wget http://httpupdate.cpanel.net/ubuntu/pool/cpanel-perl-536/cpanel-perl-536_5.36.0-2.cp108~u24_amd64.deb
-sudo dpkg -i cpanel-perl-536_5.36.0-2.cp108~u24_amd64.deb
-sudo apt install -y libfile-fcntllock-perl libnet-ssleay-perl
-sudo /usr/local/cpanel/scripts/install_cpanel
-
-# Đợi quá trình cài đặt hoàn tất (có thể mất 1-2 giờ)
-
-# 5. Cấu hình Firewall (UFW)
-sudo ufw allow 9090/tcp  # Prometheus
-sudo ufw allow 9100/tcp  # Node Exporter
-
-# Download và cài đặt cPanel
-cd /home || exit 1
-if curl -o latest -L https://securedownloads.cpanel.net/latest; then
-    chmod +x latest
-
-    # Chạy cài đặt với các tùy chọn
-    ./latest \
-    --skip-cloudlinux \
-    --skip-security-advisor \
-    --skip-selinux \
-    --force
-fi
-
-# Đợi cPanel cài đặt xong
-
-# Cài đặt LiteSpeed
-cd /usr/local/cpanel/whostmgr/docroot/cgi
-./addon_lsws.cgi
-
-# Cài đặt phpMyAdmin
-cd /usr/local/cpanel/whostmgr/docroot/cgi
-./addon_phpMyAdmin.cgi
-
-# Cấu hình phpMyAdmin
-cat > /usr/local/cpanel/etc/phpMyAdmin/config.inc.php << EOF
-<?php
-\$cfg['blowfish_secret'] = '$(openssl rand -base64 32)';
-\$cfg['Servers'][\$i]['auth_type'] = 'cookie';
-\$cfg['Servers'][\$i]['host'] = 'localhost';
-\$cfg['Servers'][\$i]['connect_type'] = 'tcp';
-\$cfg['Servers'][\$i]['compress'] = false;
-\$cfg['Servers'][\$i]['AllowNoPassword'] = false;
-\$cfg['UploadDir'] = '';
-\$cfg['SaveDir'] = '';
-\$cfg['MaxRows'] = 50;
-\$cfg['SendErrorReports'] = 'never';
-\$cfg['ShowPhpInfo'] = false;
-EOF
-
-# Cấu hình Apache proxy ports cho cPanel và WHM
-cat > /etc/apache2/conf.d/whm.conf << EOF
-<VirtualHost *:80>
-    ServerName $HOSTNAME
-    ProxyPass / http://localhost:2082/
-    ProxyPassReverse / http://localhost:2082/
-</VirtualHost>
-
-<VirtualHost *:443>
-    ServerName $HOSTNAME
-    SSLEngine On
-    SSLCertificateFile /etc/ssl/certs/ssl-cert-snakeoil.pem
-    SSLCertificateKeyFile /etc/ssl/private/ssl-cert-snakeoil.key
-    ProxyPass / https://localhost:2083/
-    ProxyPassReverse / https://localhost:2083/
-</VirtualHost>
-EOF
-
-# Cấu hình LiteSpeed Virtual Host
-cat > /usr/local/lsws/conf/vhosts/$HOSTNAME.conf << EOF
-docRoot                   \$VH_ROOT/public_html
-vhDomain                 $HOSTNAME
-adminEmails              $EMAIL
-enableGzip               1
-enableBr                 1
-enableH2                 1
-sslCertFile             /etc/ssl/certs/ssl-cert-snakeoil.pem
-sslKeyFile              /etc/ssl/private/ssl-cert-snakeoil.key
-
-context / {
-  type                   proxy
-  handler               proxyHandler
-  addDefaultCharset     off
-}
-
-rewrite  {
-  enable                1
-  autoLoadHtaccess      1
-}
-EOF
-
-# Tối ưu LiteSpeed
-cat > /usr/local/lsws/conf/httpd_config.conf << EOF
-maxConnections                10000
-maxSSLConnections            10000
-connTimeout                  300
-maxKeepAliveReq             10000
-keepAliveTimeout            5
-smartKeepAlive              1
-gracefulRestartTimeout      300
-mime                        conf/mime.properties
-showVersionNumber           0
-useIpInProxyHeader         1
-EOF
-
-# Cài đặt Memcached
-apt install memcached -y
-systemctl start memcached
-systemctl enable memcached
-
-# Cài đặt Redis
-apt install redis -y
-systemctl start redis
-systemctl enable redis
-
-# Tối ưu PHP
-cat > /usr/local/lib/php.ini << EOF
-memory_limit = 512M
-max_execution_time = 300
-max_input_time = 300
-post_max_size = 50M
-upload_max_filesize = 50M
-max_input_vars = 5000
-realpath_cache_size = 10M
-realpath_cache_ttl = 7200
-opcache.enable=1
-opcache.memory_consumption=128
-opcache.interned_strings_buffer=8
-opcache.max_accelerated_files=4000
-opcache.revalidate_freq=60
-opcache.fast_shutdown=1
-opcache.enable_cli=1
-EOF
-
-# Tối ưu MySQL
-cat > /etc/my.cnf << EOF
-[mysqld]
-innodb_buffer_pool_size = 1G
-innodb_log_file_size = 256M
-innodb_log_buffer_size = 8M
-innodb_file_per_table = 1
-innodb_flush_log_at_trx_commit = 2
-innodb_flush_method = O_DIRECT
-max_connections = 1000
-query_cache_size = 128M
-query_cache_limit = 2M
-EOF
-
-# Cài đặt CloudFlare
-/usr/local/cpanel/scripts/install_plugin /usr/local/cpanel/base/frontend/paper_lantern/cloudflare
-
-# Tối ưu kernel parameters
-cat >> /etc/sysctl.conf << EOF
-net.core.somaxconn = 65535
-net.core.netdev_max_backlog = 65535
-net.ipv4.tcp_max_syn_backlog = 65535
-net.ipv4.tcp_fin_timeout = 30
-net.ipv4.tcp_keepalive_time = 300
-net.ipv4.tcp_max_tw_buckets = 2000000
-net.ipv4.tcp_tw_reuse = 1
-net.ipv4.tcp_fastopen = 3
-EOF
-# Apply kernel parameters
-sysctl -p
-
-# Cài đặt CSF Firewall
-cd /usr/src
-rm -fv csf.tgz
-wget https://download.configserver.com/csf.tgz
-tar -xzf csf.tgz
-cd csf
-sh install.sh
-
-# Tối ưu CSF
-sed -i 's/^TESTING = "1"/TESTING = "0"/' /etc/csf/csf.conf
-sed -i 's/^CT_LIMIT = "30"/CT_LIMIT = "60"/' /etc/csf/csf.conf
-sed -i 's/^CT_INTERVAL = "30"/CT_INTERVAL = "60"/' /etc/csf/csf.conf
-
-# Restart CSF
-csf -r
-
-# Cài đặt ImunifyAV
-wget https://repo.imunify360.cloudlinux.com/defence360/imav-deploy.sh
-bash imav-deploy.sh
-
-# Tạo script backup tự động
-cat > /root/backup.sh << EOF
-#!/bin/bash
-/usr/local/cpanel/scripts/pkgacct --skiphomedir $USER
-EOF
-chmod +x /root/backup.sh
-
-# Thêm cronjob backup
-(crontab -l 2>/dev/null; echo "0 2 * * * /root/backup.sh") | crontab -
-
-# Thêm cấu hình proxy cho phpMyAdmin
-cat > /etc/apache2/conf.d/phpmyadmin.conf << EOF
-<VirtualHost *:80>
-    ServerName $HOSTNAME/phpmyadmin
-    ProxyPass /phpmyadmin http://localhost:2095/
-    ProxyPassReverse /phpmyadmin http://localhost:2095/
-</VirtualHost>
-EOF
-
-# Restart services
-systemctl restart apache2
-systemctl restart lsws
-/scripts/restartsrv_httpd
-
-echo "Cài đặt hoàn tất. Bạn có thể truy cập:"
-echo "WHM: http://$HOSTNAME"
-echo "cPanel: http://$HOSTNAME/cpanel"
-echo "phpMyAdmin: http://$HOSTNAME/phpmyadmin"
-echo "Email admin: $EMAIL"
-echo "Cài đặt hoàn tất!"
-echo "Truy cập VSCode Server tại: http://your-ip"
-echo "Mật khẩu: $VSCODE_PASSWORD"
-echo "Python versions đã cài đặt:"
-pyenv versions
+echo -e "${YELLOW}Thông tin truy cập:${NC}"
+echo -e "${BLUE}
++------------------------------------------+
+| Trang web chính: http://$DOMAIN         |
+| phpMyAdmin:     http://$DOMAIN/phpmyadmin
+| VS Code Server: http://$DOMAIN:$VSCODE_PORT
+| Grafana:        http://$DOMAIN:3001     
++------------------------------------------+
+Thông tin đăng nhập:
+- MySQL Root: root / $MYSQL_ROOT_PASSWORD
+- VS Code:     Password: $VSCODE_PASS
+- Grafana:     admin / $GRAFANA_PASS
+${NC}"
