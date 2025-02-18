@@ -54,7 +54,7 @@ curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | bash
 apt update
 
 # Install required packages
-apt -y install php8.1 php8.1-{cli,gd,mysql,pdo,mbstring,tokenizer,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server
+apt -y install php8.2 php8.2-{cli,gd,mysql,pdo,mbstring,tokenizer,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server
 
 # Install Composer
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -76,12 +76,17 @@ curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/downl
 tar -xzvf panel.tar.gz
 chmod -R 755 storage/* bootstrap/cache/
 
-# Install panel
+# Create user for Composer
+useradd -r -s /bin/bash pterodactyl
+chown -R pterodactyl:pterodactyl /var/www/pterodactyl
+
+# Install panel as pterodactyl user
+su pterodactyl <<'EOF'
+cd /var/www/pterodactyl
 cp .env.example .env
 composer install --no-dev --optimize-autoloader
-
-# Generate key
 php artisan key:generate --force
+EOF
 
 # Setup environment
 php artisan p:environment:setup \
@@ -142,7 +147,7 @@ server {
 
     location ~ \.php$ {
         fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
         fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param PHP_VALUE "upload_max_filesize = 100M \n post_max_size=100M";
@@ -183,7 +188,7 @@ yarn build
 
 # Restart services
 systemctl restart nginx
-systemctl restart php8.1-fpm
+systemctl restart php8.2-fpm
 
 # Get server IP
 SERVER_IP=$(curl -s ifconfig.me)
