@@ -1,132 +1,200 @@
 #!/bin/bash
 
-# Check root privileges
-if [[ $EUID -ne 0 ]]; then
-    echo "Script này cần chạy với quyền root. Hãy sử dụng sudo!" 1>&2
-    exit 1
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# Function to print colored messages
+print_message() {
+    echo -e "${2}${1}${NC}"
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then 
+    print_message "Please run as root" "$RED"
+    exit
 fi
 
 # Get user inputs
-read -p "Nhập username admin: " admin_user
-read -s -p "Nhập password admin: " admin_pass
+read -p "Enter admin email: " EMAIL
+read -p "Enter admin username: " USERNAME
+read -sp "Enter admin password: " PASSWORD
 echo
-read -p "Nhập email admin: " admin_email
+read -p "Do you want to use HTTPS? (y/N): " USE_HTTPS
+read -p "Enter custom port (press Enter for default 443/80): " CUSTOM_PORT
 
-# Port configuration
-echo -e "\nChọn port (80/443), mặc định 443:"
-read port
-if [[ -z "$port" ]]; then
-    port=443
-elif [[ "$port" != "80" && "$port" != "443" ]]; then
-    echo "Port không hợp lệ! Sử dụng port mặc định 443."
-    port=443
-fi
-
-# Get server IP
-ip=$(curl -s http://checkip.amazonaws.com)
-
-# Configure APP_URL
-if [[ "$port" == "80" ]]; then
-    app_url="http://$ip"
+# Set default port based on protocol
+if [ -z "$CUSTOM_PORT" ]; then
+    if [[ "$USE_HTTPS" =~ ^[Yy]$ ]]; then
+        PORT=443
+    else
+        PORT=80
+    fi
 else
-    app_url="https://$ip"
+    PORT=$CUSTOM_PORT
 fi
 
-# Install dependencies
-echo -e "\nCài đặt các gói cần thiết..."
+# Update system
+print_message "Updating system..." "$YELLOW"
 apt update && apt upgrade -y
-apt install -y curl mariadb-server nginx php-fpm php-cli php-common php-curl php-gd php-mysql php-mbstring php-xml php-zip php-bcmath php-tokenizer openssl redis-server
+
+# Install required dependencies
+print_message "Installing dependencies..." "$YELLOW"
+apt -y install software-properties-common curl apt-transport-https ca-certificates gnupg
+
+# Add PHP repository
+LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php
+
+# Add MariaDB repository
+curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | bash
+
+# Update repositories
+apt update
+
+# Install required packages
+apt -y install php8.1 php8.1-{cli,gd,mysql,pdo,mbstring,tokenizer,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server
 
 # Install Composer
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Configure database
-echo -e "\nCấu hình database..."
-db_password=$(openssl rand -hex 16)
-mysql -e "CREATE DATABASE panel;"
-mysql -e "CREATE USER 'pterodactyl'@'localhost' IDENTIFIED BY '${db_password}';"
-mysql -e "GRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'localhost';"
-mysql -e "FLUSH PRIVILEGES;"
+# Configure MariaDB
+mysql_secure_installation
 
-# Install Panel
-echo -e "\nCài đặt Pterodactyl Panel..."
+# Create database
+DBPASS=$(openssl rand -base64 16)
+mysql -u root -e "CREATE DATABASE panel;"
+mysql -u root -e "CREATE USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY '${DBPASS}';"
+mysql -u root -e "GRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1' WITH GRANT OPTION;"
+mysql -u root -e "FLUSH PRIVILEGES;"
+
+# Download Pterodactyl
 mkdir -p /var/www/pterodactyl
 cd /var/www/pterodactyl
 curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz
 tar -xzvf panel.tar.gz
 chmod -R 755 storage/* bootstrap/cache/
 
-# Configure .env
+# Install panel
 cp .env.example .env
-sed -i "s/APP_URL=.*/APP_URL=${app_url}/" .env
-sed -i "s/DB_HOST=.*/DB_HOST=127.0.0.1/" .env
-sed -i "s/DB_DATABASE=.*/DB_DATABASE=panel/" .env
-sed -i "s/DB_USERNAME=.*/DB_USERNAME=pterodactyl/" .env
-sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=${db_password}/" .env
-sed -i "s/APP_ENV=.*/APP_ENV=production/" .env
-sed -i "s/CACHE_DRIVER=.*/CACHE_DRIVER=redis/" .env
-sed -i "s/SESSION_DRIVER=.*/SESSION_DRIVER=redis/" .env
-sed -i "s/QUEUE_CONNECTION=.*/QUEUE_CONNECTION=redis/" .env
+composer install --no-dev --optimize-autoloader
 
-# Install dependencies and setup
-composer install --optimize-autoloader --no-dev
+# Generate key
 php artisan key:generate --force
-php artisan migrate --force
-php artisan db:seed --force
-php artisan p:user:make --email=${admin_email} --username=${admin_user} --name=Admin --admin=1 --password=${admin_pass}
+
+# Setup environment
+php artisan p:environment:setup \
+    --author=$EMAIL \
+    --url=http://localhost \
+    --timezone=Asia/Ho_Chi_Minh \
+    --cache=redis \
+    --session=redis \
+    --queue=redis \
+    --redis-host=127.0.0.1 \
+    --redis-pass= \
+    --redis-port=6379
+
+# Setup database
+php artisan p:environment:database \
+    --host=127.0.0.1 \
+    --port=3306 \
+    --database=panel \
+    --username=pterodactyl \
+    --password=$DBPASS
+
+# Setup mail
+php artisan p:environment:mail
+
+# Setup admin user
+php artisan p:user:make \
+    --email=$EMAIL \
+    --username=$USERNAME \
+    --name-first=Admin \
+    --name-last=User \
+    --password=$PASSWORD \
+    --admin=1
+
+# Set permissions
+chown -R www-data:www-data /var/www/pterodactyl/*
 
 # Configure Nginx
-echo -e "\nCấu hình Nginx..."
-if [[ "$port" == "443" ]]; then
-    mkdir -p /etc/nginx/ssl
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/pterodactyl.key -out /etc/nginx/ssl/pterodactyl.crt -subj "/CN=${ip}"
-fi
-
-cat > /etc/nginx/sites-available/pterodactyl.conf <<EOL
+cat > /etc/nginx/sites-available/pterodactyl.conf <<EOF
 server {
-    listen ${port} ${([[ "$port" == "443" ]] && echo "ssl")};
-    server_name ${ip};
+    listen ${PORT};
+    server_name _;
+    
     root /var/www/pterodactyl/public;
     index index.php;
 
-    $([[ "$port" == "443" ]] && echo "ssl_certificate /etc/nginx/ssl/pterodactyl.crt;
-    ssl_certificate_key /etc/nginx/ssl/pterodactyl.key;")
+    access_log /var/log/nginx/pterodactyl.app-access.log;
+    error_log  /var/log/nginx/pterodactyl.app-error.log error;
+
+    # allow larger file uploads and longer script runtimes
+    client_max_body_size 100m;
+    client_body_timeout 120s;
+
+    sendfile off;
 
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
     location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:$(ls /var/run/php/php*-fpm.sock);
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param PHP_VALUE "upload_max_filesize = 100M \n post_max_size=100M";
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_intercept_errors off;
+        fastcgi_buffer_size 16k;
+        fastcgi_buffers 4 16k;
+        fastcgi_connect_timeout 300;
+        fastcgi_send_timeout 300;
+        fastcgi_read_timeout 300;
     }
 
     location ~ /\.ht {
         deny all;
     }
 }
-EOL
+EOF
 
-ln -s /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/
-nginx -t && systemctl restart nginx
+# Enable site configuration
+ln -s /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pterodactyl.conf
+rm -f /etc/nginx/sites-enabled/default
 
-# Install Nebula theme
-echo -e "\nCài đặt theme Nebula..."
-cd /var/www/pterodactyl/public/themes
-git clone https://github.com/NebulaServices/Nebula.git nebula
-echo 'APP_THEME=nebula' >> /var/www/pterodactyl/.env
-php artisan view:clear
-
-# Final output
-echo -e "\nCài đặt hoàn tất!"
-echo "Truy cập Panel tại: ${app_url}"
-echo "Username admin: ${admin_user}"
-echo "Password admin: ${admin_pass}"
-if [[ "$port" == "443" ]]; then
-    echo "Lưu ý: Bạn đang sử dụng chứng chỉ tự tạo, trình duyệt có thể cảnh báo bảo mật!"
+# Install SSL if HTTPS is selected
+if [[ "$USE_HTTPS" =~ ^[Yy]$ ]]; then
+    apt install -y certbot python3-certbot-nginx
+    print_message "Please setup SSL certificate using: certbot --nginx" "$YELLOW"
 fi
 
-echo -e "\nHướng dẫn thay đổi theme:"
-echo "1. Clone theme vào thư mục /var/www/pterodactyl/public/themes/"
-echo "2. Sửa file .env: APP_THEME=tên_theme"
-echo "3. Chạy lệnh: php artisan view:clear"
+# Install Nebula theme
+cd /var/www/pterodactyl
+mkdir -p public/themes
+cd public/themes
+git clone https://github.com/Pterodactyl-Theme/Nebula.git
+cd Nebula
+yarn install
+yarn build
+
+# Restart services
+systemctl restart nginx
+systemctl restart php8.1-fpm
+
+# Get server IP
+SERVER_IP=$(curl -s ifconfig.me)
+
+# Print completion message
+print_message "\nPterodactyl Panel Installation Complete!" "$GREEN"
+print_message "Panel URL: http://$SERVER_IP:$PORT" "$GREEN"
+print_message "Admin Username: $USERNAME" "$GREEN"
+print_message "Admin Password: $PASSWORD" "$GREEN"
+print_message "\nTo install themes, visit: https://github.com/topics/pterodactyl-theme" "$YELLOW"
+print_message "To change theme:" "$YELLOW"
+print_message "1. Go to Admin Panel > Settings > Theme" "$YELLOW"
+print_message "2. Select your desired theme" "$YELLOW"
+print_message "3. Save changes" "$YELLOW"
