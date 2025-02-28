@@ -56,10 +56,10 @@ chmod +x ./fs/zmine.sh
 git clone https://github.com/quangminhlh/fs.git
 
 # Cấp quyền cho file setup
-chmod +x ./fs/zmine.sh
+chmod +x ./fs/zynther_vs.sh
 
 # Thực thi file setup
-./fs/zmine.sh
+./fs/zynther_vs.sh
 ```
 
 ## 📌 **Nếu bạn vừa cài lại hệ điều hành cho server và không kết nối được SSH**
